@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameCanvas {
+            border: 2px solid #16213e;
+            display: none;
+            box-shadow: 0 0 20px #0f3460;
+        }
+        .button {
+            font-size: 18px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #e94560;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #ff6b6b;
+        }
+        #startButton {
+            position: absolute;
+            display: none;
+        }
+        #authContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            background-color: #16213e;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(15, 52, 96, 0.5);
+        }
+        .authForm {
+            display: none;
+            margin-top: 20px;
+        }
+        .authForm input {
+            display: block;
+            margin-bottom: 10px;
+            padding: 10px;
+            width: 200px;
+            border: none;
+            border-radius: 5px;
+            background-color: #0f3460;
+            color: #ffffff;
+        }
+        .authForm button, #authContainer button {
+            margin: 5px;
+        }
+        #debugInfo {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(22, 33, 62, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        #infoScreen {
+            text-align: center;
+            max-width: 600px;
+            background-color: #16213e;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(15, 52, 96, 0.5);
+        }
+        h1, h2 {
+            color: #e94560;
+        }
+        ul {
+            text-align: left;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <button id="startButton" class="button">Start Game</button>
+    <div id="infoScreen">
+        <h1>Welcome to Pong!</h1>
+        <p>Pong is a classic arcade game that simulates table tennis. Players control a paddle by moving it vertically across the left or right side of the screen. They can compete against each other or against the computer.</p>
+        <h2>How to Play:</h2>
+        <ul>
+            <li>Use the Up and Down arrow keys to move your paddle</li>
+            <li>Prevent the ball from passing your paddle</li>
+            <li>Try to make the ball pass your opponent's paddle</li>
+            <li>First player to score 5 points wins!</li>
+        </ul>
+        <button id="proceedToAuth" class="button">Play Now!</button>
+    </div>
+    <div id="authContainer">
+        <h2>To play, please log in or register</h2>
+        <button id="showLoginBtn" class="button">Login</button>
+        <button id="showRegisterBtn" class="button">Register</button>
+        <div id="loginForm" class="authForm">
+            <input type="text" id="loginUsername" placeholder="Username">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <button id="loginBtn" class="button">Login</button>
+        </div>
+        <div id="registerForm" class="authForm">
+            <input type="text" id="registerUsername" placeholder="Username">
+            <input type="password" id="registerPassword" placeholder="Password">
+            <button id="registerBtn" class="button">Register</button>
+        </div>
+    </div>
+    <div id="debugInfo"></div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const debugInfo = document.getElementById('debugInfo');
+        const infoScreen = document.getElementById('infoScreen');
+        const authContainer = document.getElementById('authContainer');
+        const proceedToAuthBtn = document.getElementById('proceedToAuth');
+
+        // Game objects
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 10,
+            speed: 5,
+            dx: 5,
+            dy: 5
+        };
+
+        const paddle = {
+            width: 10,
+            height: 100,
+            speed: 8
+        };
+
+        const user = {
+            x: 10,
+            y: canvas.height / 2 - paddle.height / 2,
+            score: 0
+        };
+
+        const computer = {
+            x: canvas.width - paddle.width - 10,
+            y: canvas.height / 2 - paddle.height / 2,
+            score: 0
+        };
+
+        let gameStarted = false;
+        let gameOver = false;
+
+        // Draw functions
+        function drawRect(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+        }
+
+        function drawCircle(x, y, radius, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2, false);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawText(text, x, y, color, size = '30px') {
+            ctx.fillStyle = color;
+            ctx.font = `${size} Arial`;
+            ctx.fillText(text, x, y);
+        }
+
+        // Collision detection
+        function collision(b, p) {
+            return b.y + b.radius > p.y && b.y - b.radius < p.y + paddle.height && 
+                   b.x + b.radius > p.x && b.x - b.radius < p.x + paddle.width;
+        }
+
+        // Key event listeners
+        let upPressed = false;
+        let downPressed = false;
+
+        document.addEventListener('keydown', keyDownHandler);
+        document.addEventListener('keyup', keyUpHandler);
+
+        function keyDownHandler(e) {
+            if (e.key === 'ArrowUp') {
+                upPressed = true;
+            } else if (e.key === 'ArrowDown') {
+                downPressed = true;
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === 'ArrowUp') {
+                upPressed = false;
+            } else if (e.key === 'ArrowDown') {
+                downPressed = false;
+            }
+        }
+
+        // Reset ball
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx = -ball.dx;
+            ball.speed = 5;
+        }
+
+        // Update game state
+        function update() {
+            if (!gameStarted || gameOver) return;
+
+            // Move user paddle
+            if (upPressed && user.y > 0) {
+                user.y -= paddle.speed;
+            } else if (downPressed && user.y < canvas.height - paddle.height) {
+                user.y += paddle.speed;
+            }
+
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // Computer AI
+            let computerCenter = computer.y + paddle.height / 2;
+            let ballPrediction = ball.y + (ball.x - computer.x) * ball.dy / ball.dx;
+            let randomOffset = (Math.random() - 0.5) * 20;
+            let targetY = ballPrediction + randomOffset;
+            
+            let difficultyFactor = 0.7;
+            let moveSpeed = paddle.speed * difficultyFactor;
+
+            if (computerCenter < targetY - 15) {
+                computer.y += moveSpeed;
+            } else if (computerCenter > targetY + 15) {
+                computer.y -= moveSpeed;
+            }
+
+            computer.y = Math.max(0, Math.min(canvas.height - paddle.height, computer.y));
+
+            // Ball collision with top and bottom walls
+            if (ball.y + ball.radius > canvas.height || ball.y - ball.radius < 0) {
+                ball.dy = -ball.dy;
+            }
+
+            // Ball collision with paddles
+            let player = (ball.x < canvas.width / 2) ? user : computer;
+            if (collision(ball, player)) {
+                let collidePoint = ball.y - (player.y + paddle.height / 2);
+                collidePoint = collidePoint / (paddle.height / 2);
+                let angleRad = collidePoint * Math.PI / 4;
+                let direction = (ball.x < canvas.width / 2) ? 1 : -1;
+                ball.dx = direction * ball.speed * Math.cos(angleRad);
+                ball.dy = ball.speed * Math.sin(angleRad);
+                ball.speed += 0.2;
+            }
+
+            // Update score and reset ball
+            if (ball.x + ball.radius > canvas.width) {
+                user.score++;
+                resetBall();
+            } else if (ball.x - ball.radius < 0) {
+                computer.score++;
+                resetBall();
+            }
+
+            // End game condition
+            if (user.score === 5 || computer.score === 5) {
+                gameOver = true;
+            }
+
+            // Update debug info
+            updateDebugInfo();
+        }
+
+        // Render game
+        function render() {
+            // Clear canvas
+            drawRect(0, 0, canvas.width, canvas.height, '#1a1a2e');
+
+            if (!gameStarted) {
+                drawText("Press Start to play!", canvas.width / 2 - 100, canvas.height / 2, '#e94560', '30px');
+                return;
+            }
+
+            // Draw scores
+            drawText(user.score, canvas.width / 4, 50, '#e94560', '45px');
+            drawText(computer.score, 3 * canvas.width / 4, 50, '#e94560', '45px');
+
+            // Draw paddles
+            drawRect(user.x, user.y, paddle.width, paddle.height, '#0f3460');
+            drawRect(computer.x, computer.y, paddle.width, paddle.height, '#0f3460');
+
+            // Draw ball
+            drawCircle(ball.x, ball.y, ball.radius, '#e94560');
+
+            if (gameOver) {
+                drawRect(0, 0, canvas.width, canvas.height, 'rgba(22, 33, 62, 0.8)');
+                let winner = user.score === 5 ? "You" : "Computer";
+                drawText(`Game Over - ${winner} Won!`, canvas.width / 2 - 150, canvas.height / 2, '#e94560', '30px');
+                drawText(`${user.score} - ${computer.score}`, canvas.width / 2 - 50, canvas.height / 2 + 50, '#e94560', '45px');
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Debug info
+        function updateDebugInfo() {
+            debugInfo.innerHTML = `
+                Game Started: ${gameStarted}<br>
+                Game Over: ${gameOver}<br>
+                Ball Position: (${ball.x.toFixed(2)}, ${ball.y.toFixed(2)})<br>
+                Ball Speed: ${ball.speed.toFixed(2)}<br>
+                User Paddle: ${user.y.toFixed(2)}<br>
+                Computer Paddle: ${computer.y.toFixed(2)}<br>
+                Score: ${user.score} - ${computer.score}
+            `;
+        }
+
+        // Start button event listener
+        startButton.addEventListener('click', () => {
+            if (gameOver) {
+                // Reset game if it's over
+                user.score = 0;
+                computer.score = 0;
+                resetBall();
+                gameOver = false;
+            }
+            gameStarted = true;
+            startButton.style.display = 'none';
+        });
+
+        // Authentication related code
+        const showLoginBtn = document.getElementById('showLoginBtn');
+        const showRegisterBtn = document.getElementById('showRegisterBtn');
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const registerBtn = document.getElementById('registerBtn');
+
+        proceedToAuthBtn.addEventListener('click', () => {
+            infoScreen.style.display = 'none';
+            authContainer.style.display = 'block';
+        });
+
+        showLoginBtn.addEventListener('click', () => {
+            loginForm.style.display = 'block';
+            registerForm.style.display = 'none';
+        });
+
+        showRegisterBtn.addEventListener('click', () => {
+            registerForm.style.display = 'block';
+            loginForm.style.display = 'none';
+        });
+
+        loginBtn.addEventListener('click', async () => {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password }),
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    alert('Login successful!');
+                    authContainer.style.display = 'none';
+                    canvas.style.display = 'block';
+                    startButton.style.display = 'block';
+                } else {
+                    alert(`Login failed: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during login.');
+            }
+        });
+
+        registerBtn.addEventListener('click', async () => {
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+            try {
+                    const response = await fetch('/api/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ username, password }),
+                    });
+                    const data = await response.json();
+                    if (response.ok) {
+                        alert('Registration successful! Please log in.');
+                        registerForm.style.display = 'none';
+                        loginForm.style.display = 'block';
+                    } else {
+                        alert(`Registration failed: ${data.message}`);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred during registration.');
+                }
+            });
+
+        // Start the game loop
+        gameLoop();
+    </script>
+</body>
+</html>
